@@ -1,0 +1,396 @@
+import requests #will allow use to request information from a website
+import csv #allows us to create a .csv file with the information
+import time 
+from datetime import datetime
+
+
+YEARS = [2024, 2025, 2026] #Years that we are doing
+
+ITEMS_PER_PAGE = 50 #Will Be Useful later to determine the length of pages
+
+#Allows us to seem more human when requesting from the site
+normal_headers = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/152.0.0.0 Safari/537.36"
+    ),
+    "Accept": (
+        "text/html,application/xhtml+xml,application/xml;q=0.9,"
+        "image/avif,image/webp,*/*;q=0.8"
+    ),
+    "Accept-Language": "en-US,en;q=0.9",
+}
+
+#naming our eventual csv file
+output_file = "uconn_qb_recruits_2024_2026.csv"
+
+#Our Columns dervied from the information that can be pulled
+fieldnames = [
+    "QB",
+    "CLASS",
+    "247 RATINGS",
+    "STARS",
+    "HEIGHT",
+    "WEIGHT",
+    "POSITION",
+    "STATE",
+    "HOMETOWN",
+    "HIGH SCHOOL",
+    "COMMITTED DATE",
+    "POSITION RANK",
+    "NATIONAL RANK",
+    "STATE RANK",
+    "COMMITTED SCHOOL ID",
+    "RECRUIT STATUS",
+    "PLAYER URL",
+]
+
+#formats the date's and time properly because it wasn't initally
+def clean_commit_date(date_string):
+    if not date_string:
+        return ""
+    try:
+        date_object = datetime.strptime(
+            date_string,
+            "%m/%d/%Y %I:%M:%S %p"
+        )
+        return date_object.strftime("%m/%d/%Y")
+    except ValueError:
+        return date_string
+
+#creates a session which we can loop
+session = requests.Session()
+
+#creates an empty list where we will put all the qb names then run a for loop using it to put the information into the csv
+all_qbs = []
+
+#for loop to make sure we do all years, as well as a printing process to let whoever runs it to know that it's working
+for year in YEARS:
+
+    print("\n")
+    print(f"STARTING {year}")
+
+    #open's the url with whatever the year of the for loop is
+    normal_url = (
+        f"https://247sports.com/"
+        f"season/{year}-football/commits/"
+        f"?PositionGroup=1"
+    )
+
+    #we are using the try function to get the data instead of Beautiful Soup, because the site is encoded with python that makes it very easy to use the get function
+    try:
+        normal_response = session.get(
+            normal_url,
+            headers=normal_headers,
+            timeout=30
+        )
+
+    #this is a debugging feature that allows for us to see when the page can't open, then we skip that year.
+    except requests.exceptions.RequestException as e:
+        print(
+            f"Could not open normal "
+            f"{year} page:"
+        )
+        print(e)
+        continue
+
+    print(
+        "Normal page status:",
+        normal_response.status_code
+    )
+
+    if normal_response.status_code != 200:
+        print(
+            f"Skipping {year} because "
+            f"the normal page failed."
+        )
+        continue
+
+    #In order to find more than just the page limited 50 names, we had to actually get into the original file that the site pulls from, so this is just creating our user for that site
+    json_headers = {
+        "User-Agent":
+            normal_headers["User-Agent"],
+
+        "Accept":
+            "application/json, "
+            "text/javascript, */*; q=0.01",
+
+        "Accept-Language":
+            "en-US,en;q=0.9",
+
+        "Referer":
+            normal_url,
+
+        "X-Requested-With":
+            "XMLHttpRequest",
+    }
+
+    page = 1
+    year_qbs = 0
+    year_recruits_checked = 0
+    
+    #this loop is doing the same thing as above, and it's just letting us know if the requested information has been accepted
+    while True:
+
+        json_url = (
+            f"https://247sports.com/"
+            f"Season/{year}-Football/"
+            f"Recruits.json"
+            f"?Items={ITEMS_PER_PAGE}"
+            f"&Page={page}"
+        )
+
+        print(
+            f"\n{year} | Requesting page "
+            f"{page}..."
+        )
+
+        try:
+            response = session.get(
+                json_url,
+                headers=json_headers,
+                timeout=30
+            )
+
+        except requests.exceptions.RequestException as e:
+            print("Request failed:")
+            print(e)
+            break
+
+        print(
+            "Status:",
+            response.status_code
+        )
+
+        if response.status_code != 200:
+            print(
+                "Stopping this year "
+                "because request failed."
+            )
+            break
+
+        #incase of error
+        try:
+            data = response.json()
+        except ValueError:
+            print(
+                "Response was not valid JSON."
+            )
+            break
+
+        print(
+            "Records returned:",
+            len(data)
+        )
+
+        #Checking if there is nothing left so we can stop loop
+        if len(data) == 0:
+            print(
+                "No more recruits."
+            )
+            break
+
+        year_recruits_checked += len(data)
+
+        #getting players
+        for item in data:
+            player = item.get(
+                "Player"
+            )
+            if not player:
+                continue
+
+            #getting positions
+            position_data = player.get(
+                "PrimaryPlayerPosition"
+            )
+            if not position_data:
+                continue
+            position = position_data.get(
+                "Abbreviation"
+            )
+
+            #only keeping quarterbacks
+            if position != "QB":
+                continue
+
+            #only committed players
+            committed_school_id = item.get(
+                "CommittedInstitution"
+            )
+
+            if not committed_school_id:
+                continue
+
+            #names
+            name = player.get(
+                "FullName",
+                ""
+            )
+
+            #hometowns
+            hometown_data = player.get(
+                "Hometown"
+            ) or {}
+            hometown = hometown_data.get(
+                "City",
+                ""
+            )
+            state = hometown_data.get(
+                "State",
+                ""
+            )
+
+            #highschool
+            high_school_data = player.get(
+                "PlayerHighSchool"
+            ) or {}
+
+            high_school = high_school_data.get(
+                "Name",
+                ""
+            )
+            
+            #commit_date
+            commit_date = clean_commit_date(
+                item.get(
+                    "AnnouncementDate"
+                )
+            )
+
+            #recruit status
+            recruit_status = item.get(
+                "HighestRecruitInterestEventType",
+                ""
+            )
+
+            #building rows
+            row = {
+                "QB":
+                    name,
+                "CLASS":
+                    item.get(
+                        "Year",
+                        year
+                    ),
+                "247 RATINGS":
+                    player.get(
+                        "Rating",
+                        ""
+                    ),
+                "STARS":
+                    player.get(
+                        "StarRating",
+                        ""
+                    ),
+                "HEIGHT":
+                    player.get(
+                        "Height",
+                        ""
+                    ),
+                "WEIGHT":
+                    player.get(
+                        "Weight",
+                        ""
+                    ),
+                "POSITION":
+                    position,
+                "STATE":
+                    state,
+                "HOMETOWN":
+                    hometown,
+                "HIGH SCHOOL":
+                    high_school,
+                "COMMITTED DATE":
+                    commit_date,
+                "POSITION RANK":
+                    player.get(
+                        "PositionRank",
+                        ""
+                    ),
+                "NATIONAL RANK":
+                    player.get(
+                        "NationalRank",
+                        ""
+                    ),
+                "STATE RANK":
+                    player.get(
+                        "StateRank",
+                        ""
+                    ),
+                "COMMITTED SCHOOL ID":
+                    committed_school_id,
+                "RECRUIT STATUS":
+                    recruit_status,
+                "PLAYER URL":
+                    player.get(
+                        "Url",
+                        ""
+                    ),
+            }
+
+            all_qbs.append(row)
+            year_qbs += 1
+
+            print(
+                "QB FOUND:",
+                name,
+                "| Rating:",
+                player.get("Rating"),
+                "| Rank:",
+                player.get("PositionRank")
+            )
+
+        #loop continuation
+        if len(data) < ITEMS_PER_PAGE:
+            print(
+                "\nReached final page."
+            )
+            break
+
+        page += 1
+
+        #To not get site banned
+        time.sleep(1)
+
+    #yearly summary
+    print("\n")
+    print(
+        f"{year} recruits checked:",
+        year_recruits_checked
+    )
+    print(
+        f"{year} committed QBs found:",
+        year_qbs
+    )
+
+#creating the csv file
+with open(
+    output_file,
+    "w",
+    newline="",
+    encoding="utf-8-sig"
+) as csvfile:
+    writer = csv.DictWriter(
+        csvfile,
+        fieldnames=fieldnames
+    )
+    writer.writeheader()
+    writer.writerows(
+        all_qbs
+    )
+
+#ending summary
+print("\n")
+print(
+    "FINISHED"
+)
+print(
+    "TOTAL COMMITTED QBs:",
+    len(all_qbs)
+)
+print(
+    "CSV CREATED:",
+    output_file
+)
