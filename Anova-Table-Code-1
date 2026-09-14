@@ -1,0 +1,210 @@
+###################################################################
+                                #Setup#
+###################################################################
+
+import pandas as pd
+import statsmodels.api as sm
+
+from statsmodels.formula.api import ols
+
+input_file = r"C:\Users\UxVeg\OneDrive\Documents\UCONNFOOTBALLPROJECT.xlsx"
+
+df = pd.read_excel(input_file, sheet_name="Full Data")
+
+###################################################################
+                        #Data Selection#
+###################################################################
+
+anova_data = df[
+    [
+        "QB",
+        "CLASS",
+        "247 RATINGS",
+        "STARS",
+        "INCHES",
+        "WEIGHT",
+        "STATE",
+        "HOMETOWN",
+        "HIGH SCHOOL",
+        "HIGH SCHOOL RANK",
+        "HIGH SCHOOL TIER",
+        "COMMITTED DATE",
+        "POSITION RANK",
+        "NATIONAL RANK",
+        "STATE RANK",
+        "COMMITTED SCHOOL",
+        "TOP 25 TEAM",
+        "SCHOOL CONFERENCE",
+        "FBS OR FCS",
+        "STRAIGHT LINE DISTANCE (MILES)",
+        "DRIVING DISTANCE (MILES)",
+        "RECRUIT STATUS"
+    ]
+].copy()
+
+###################################################################
+                    #Numerical Variables#
+###################################################################
+
+numerical_variables = [
+    "247 RATINGS",
+    "INCHES",
+    "WEIGHT",
+    "HIGH SCHOOL RANK",
+    "POSITION RANK",
+    "NATIONAL RANK",
+    "STATE RANK",
+    "STRAIGHT LINE DISTANCE (MILES)",
+    "DRIVING DISTANCE (MILES)"
+]
+
+###################################################################
+                        #Clean Numeric Data#
+###################################################################
+
+for column in numerical_variables:
+
+    anova_data[column] = pd.to_numeric(
+        anova_data[column],
+        errors="coerce"
+    )
+
+###################################################################
+                    #Categorical Variables#
+###################################################################
+
+categorical_variables = [
+    "CLASS",
+    "STARS",
+    "HIGH SCHOOL TIER",
+    "TOP 25 TEAM",
+    "SCHOOL CONFERENCE",
+    "FBS OR FCS",
+    "RECRUIT STATUS"
+]
+
+###################################################################
+                        #ANOVA Function#
+###################################################################
+
+def anova_func(data, numerical_variable, categorical_variable):
+
+    formula = (
+        f'Q("{numerical_variable}") '
+        f'~ C(Q("{categorical_variable}"))'
+    )
+
+    model = ols(
+        formula=formula,
+        data=data
+    ).fit()
+
+    anova_table = sm.stats.anova_lm(
+        model,
+        typ=2
+    )
+
+    return anova_table
+
+###################################################################
+                    #Run All ANOVA Tests#
+###################################################################
+
+import warnings
+
+anova_results = {}
+
+for category in categorical_variables:
+
+    for numerical in numerical_variables:
+
+        test_name = f"{numerical} BY {category}"
+
+        print("\nRunning:", test_name)
+
+        with warnings.catch_warnings(record=True) as caught_warnings:
+
+            warnings.simplefilter("always")
+
+            result = anova_func(
+                anova_data,
+                numerical,
+                category
+            )
+
+            if result is not None:
+
+                anova_results[test_name] = result
+
+            if len(caught_warnings) > 0:
+
+                print("WARNING FOUND:")
+
+                for warning in caught_warnings:
+                    print(warning.message)
+        
+###################################################################
+                    #ANOVA Summary Table#
+###################################################################
+
+anova_summary = []
+
+for category in categorical_variables:
+
+    for numerical in numerical_variables:
+
+        result = anova_func(
+            anova_data,
+            numerical,
+            category
+        )
+
+        f_statistic = result.iloc[0]["F"]
+        p_value = result.iloc[0]["PR(>F)"]
+
+        if p_value < 0.05:
+            significant = "YES"
+        else:
+            significant = "NO"
+
+        anova_summary.append(
+            {
+                "NUMERICAL VARIABLE": numerical,
+                "GROUP VARIABLE": category,
+                "F STATISTIC": f_statistic,
+                "P VALUE": p_value,
+                "SIGNIFICANT": significant
+            }
+        )
+
+anova_summary = pd.DataFrame(anova_summary)
+
+###################################################################
+                            #Export#
+###################################################################
+
+output_file = r"C:\Users\UxVeg\OneDrive\Documents\UCONN_QB_ANOVA_ANALYSIS.xlsx"
+
+with pd.ExcelWriter(
+    output_file,
+    engine="openpyxl"
+) as writer:
+
+    anova_summary.to_excel(
+        writer,
+        sheet_name="ANOVA Summary",
+        index=False)
+
+    for test_name, result in anova_results.items():
+        sheet_name = test_name[:31]
+        result.to_excel( writer, sheet_name=sheet_name)
+        
+
+print("File saved to:")
+print(output_file)
+        
+
+
+
+
+
