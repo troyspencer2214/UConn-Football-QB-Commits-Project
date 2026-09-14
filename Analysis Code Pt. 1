@@ -1,0 +1,560 @@
+###################################################################
+                                #Setup#
+###################################################################
+
+import pandas as pd
+
+input_file = r"C:\Users\UxVeg\OneDrive\Documents\UCONNFOOTBALLPROJECT(COPY1).xlsx"
+
+df = pd.read_excel(
+    input_file,
+    sheet_name="Full Data"
+    )
+
+data_analysis_step_1 = df[
+    [
+        "QB",
+        "CLASS",
+        "247 RATINGS",
+        "STARS",
+        "INCHES",
+        "WEIGHT",
+        "HIGH SCHOOL RANK",
+        "HIGH SCHOOL TIER",
+        "COMMITTED SCHOOL",
+        "SCHOOL CONFERENCE",
+        "POSITION RANK",
+        "NATIONAL RANK",
+        "STATE RANK",
+        "STRAIGHT LINE DISTANCE (MILES)",
+        "DRIVING DISTANCE (MILES)"
+    ]
+].copy()
+
+###################################################################
+                        #Clean Numeric Data#
+###################################################################
+
+data_analysis_step_1["WEIGHT"] = pd.to_numeric(data_analysis_step_1["WEIGHT"], errors="coerce")
+
+###################################################################
+                        #Ordering Categoricals#
+###################################################################
+
+tier_order = [
+    "Elite HS",
+    "Good HS",
+    "Average HS",
+    "Below Average HS",
+    "N/A"
+]
+
+stars_order = [
+    5,
+    4,
+    3,
+    2,
+    1,
+    0
+]
+
+###################################################################
+                            #Baseline Counts#
+###################################################################
+
+tiers_baseline_counts = (
+    data_analysis_step_1["HIGH SCHOOL TIER"].value_counts()
+    )
+
+stars_baseline_counts = (
+    data_analysis_step_1["STARS"].value_counts()
+    )
+
+tiers_baseline_percentages = (
+    data_analysis_step_1["HIGH SCHOOL TIER"].value_counts(normalize=True).mul(100)
+    )
+
+stars_baseline_percentages = (
+    data_analysis_step_1["STARS"].value_counts(normalize=True).mul(100)
+    )
+
+###################################################################
+
+tiers_baseline = pd.DataFrame(
+    {
+        "Qbs": tiers_baseline_counts,
+        "% of Qbs": tiers_baseline_percentages
+    }
+)
+
+stars_baseline = pd.DataFrame(
+    {
+        "Qbs": stars_baseline_counts,
+        "% of Qbs": stars_baseline_percentages
+    }
+)
+
+###################################################################
+
+tiers_baseline = tiers_baseline.reindex(tier_order)
+
+stars_baseline = stars_baseline.reindex(stars_order)
+
+###################################################################
+                    #School & Conference Counts#
+###################################################################
+
+school_qb_counts = (
+    data_analysis_step_1.groupby("COMMITTED SCHOOL").size().reset_index(name="Total Qbs")
+    )
+
+conference_qb_counts = (
+    data_analysis_step_1.groupby("SCHOOL CONFERENCE").size().reset_index(name="Total Qbs")
+    )
+
+###################################################################
+
+school_tier_counts = pd.crosstab(
+    data_analysis_step_1["COMMITTED SCHOOL"],
+    data_analysis_step_1["HIGH SCHOOL TIER"]
+)
+
+school_star_counts = pd.crosstab(
+    data_analysis_step_1["COMMITTED SCHOOL"],
+    data_analysis_step_1["STARS"]
+)
+
+conference_tier_counts = pd.crosstab(
+    data_analysis_step_1["SCHOOL CONFERENCE"],
+    data_analysis_step_1["HIGH SCHOOL TIER"]
+)
+
+conference_star_counts = pd.crosstab(
+    data_analysis_step_1["SCHOOL CONFERENCE"],
+    data_analysis_step_1["STARS"]
+)
+
+###################################################################
+
+school_tier_counts = school_tier_counts.reindex(columns=tier_order, fill_value=0)
+
+conference_tier_counts = conference_tier_counts.reindex(columns=tier_order, fill_value=0)
+
+school_star_counts = school_star_counts.reindex(columns=stars_order, fill_value=0)
+
+conference_star_counts = conference_star_counts.reindex(columns=stars_order, fill_value=0)
+
+###################################################################
+                  #School & Conference Percentages#
+###################################################################
+
+school_tier_percentages = pd.crosstab(
+    data_analysis_step_1["COMMITTED SCHOOL"],
+    data_analysis_step_1["HIGH SCHOOL TIER"],
+    normalize="index"
+) * 100
+
+conference_tier_percentages = pd.crosstab(
+    data_analysis_step_1["SCHOOL CONFERENCE"],
+    data_analysis_step_1["HIGH SCHOOL TIER"],
+    normalize="index"
+) * 100
+
+school_star_percentages = pd.crosstab(
+    data_analysis_step_1["COMMITTED SCHOOL"],
+    data_analysis_step_1["STARS"],
+    normalize="index"
+) * 100
+
+conference_star_percentages = pd.crosstab(
+    data_analysis_step_1["SCHOOL CONFERENCE"],
+    data_analysis_step_1["STARS"],
+    normalize="index"
+) * 100
+
+###################################################################
+
+school_tier_percentages = school_tier_percentages.reindex(columns=tier_order, fill_value=0)
+
+conference_tier_percentages = conference_tier_percentages.reindex(columns=tier_order, fill_value=0)
+
+school_star_percentages = school_star_percentages.reindex(columns=stars_order, fill_value=0)
+
+conference_star_percentages = conference_star_percentages.reindex(columns=stars_order, fill_value=0)
+
+###################################################################
+                            #Column Creation#
+###################################################################
+
+school_tier_counts.columns = [
+    "ELITE HS QBS",
+    "GOOD HS QBS",
+    "AVERAGE HS QBS",
+    "BELOW AVG HS QBS",
+    "N/A AVG HS QBS"
+]
+
+school_tier_percentages.columns = [
+    "ELITE HS %",
+    "GOOD HS %",
+    "AVERAGE HS %",
+    "BELOW AVG HS %",
+    "N/A AVG HS %"
+]
+
+conference_tier_counts.columns = [
+    "ELITE HS QBS",
+    "GOOD HS QBS",
+    "AVERAGE HS QBS",
+    "BELOW AVG HS QBS",
+    "N/A AVG HS QBS",
+]
+
+
+conference_tier_percentages.columns = [
+    "ELITE HS %",
+    "GOOD HS %",
+    "AVERAGE HS %",
+    "BELOW AVG HS %",
+    "N/A AVG HS %"
+]
+
+school_star_counts.columns = [
+    "5 STAR QBS",
+    "4 STAR QBS",
+    "3 STAR QBS",
+    "2 STAR QBS",
+    "1 STAR QBS",
+    "UNRANKED QBS"
+]
+
+
+school_star_percentages.columns = [
+    "5 STAR %",
+    "4 STAR %",
+    "3 STAR %",
+    "2 STAR %",
+    "1 STAR %",
+    "UNRANKED %"
+]
+
+conference_star_counts.columns = [
+    "5 STAR QBS",
+    "4 STAR QBS",
+    "3 STAR QBS",
+    "2 STAR QBS",
+    "1 STAR QBS",
+    "UNRANKED QBS"
+]
+
+
+conference_star_percentages.columns = [
+    "5 STAR %",
+    "4 STAR %",
+    "3 STAR %",
+    "2 STAR %",
+    "1 STAR %",
+    "UNRANKED %"
+]
+
+###################################################################
+                    #Continuous Means & Medians#
+###################################################################
+
+school_hs_rank = (
+    data_analysis_step_1.groupby("COMMITTED SCHOOL")
+    ["HIGH SCHOOL RANK"]
+    .agg(["mean", "median"])
+    .reset_index()
+)
+
+
+school_hs_rank.columns = [
+    "COMMITTED SCHOOL",
+    "AVG HS RANK",
+    "MEDIAN HS RANK"
+]
+
+conference_hs_rank = (
+    data_analysis_step_1.groupby("SCHOOL CONFERENCE")
+    ["HIGH SCHOOL RANK"]
+    .agg(["mean", "median"])
+    .reset_index()
+)
+
+
+conference_hs_rank.columns = [
+    "SCHOOL CONFERENCE",
+    "AVG HS RANK",
+    "MEDIAN HS RANK"
+]
+
+###################################################################
+
+school_height = (
+    data_analysis_step_1.groupby("COMMITTED SCHOOL")
+    ["INCHES"]
+    .agg(["mean", "median"])
+    .reset_index()
+)
+
+
+school_height.columns = [
+    "COMMITTED SCHOOL",
+    "AVG HEIGHT",
+    "MEDIAN HEIGHT"
+]
+
+conference_height = (
+    data_analysis_step_1.groupby("SCHOOL CONFERENCE")
+    ["INCHES"]
+    .agg(["mean", "median"])
+    .reset_index()
+)
+
+
+conference_height.columns = [
+    "SCHOOL CONFERENCE",
+    "AVG HEIGHT",
+    "MEDIAN HEIGHT"
+]
+
+###################################################################
+
+school_weight = (
+    data_analysis_step_1.groupby("COMMITTED SCHOOL")
+    ["WEIGHT"]
+    .agg(["mean", "median"])
+    .reset_index()
+)
+
+
+school_weight.columns = [
+    "COMMITTED SCHOOL",
+    "AVG WEIGHT",
+    "MEDIAN WEIGHT"
+]
+
+conference_weight = (
+    data_analysis_step_1.groupby("SCHOOL CONFERENCE")
+    ["WEIGHT"]
+    .agg(["mean", "median"])
+    .reset_index()
+)
+
+
+conference_weight.columns = [
+    "SCHOOL CONFERENCE",
+    "AVG WEIGHT",
+    "MEDIAN WEIGHT"
+]
+
+###################################################################
+                            #Merging#
+###################################################################
+
+school_analysis = school_qb_counts.copy()
+
+school_analysis = school_analysis.merge(school_tier_counts, on="COMMITTED SCHOOL", how="left")
+
+school_analysis = school_analysis.merge(school_tier_percentages, on="COMMITTED SCHOOL", how="left")
+
+school_analysis = school_analysis.merge(school_star_counts, on="COMMITTED SCHOOL", how="left")
+
+school_analysis = school_analysis.merge(school_star_percentages, on="COMMITTED SCHOOL", how="left")
+
+school_analysis = school_analysis.merge(school_hs_rank, on="COMMITTED SCHOOL", how="left")
+
+school_analysis = school_analysis.merge(school_height, on="COMMITTED SCHOOL", how="left")
+
+school_analysis = school_analysis.merge(school_weight, on="COMMITTED SCHOOL", how="left")
+
+conference_analysis = conference_qb_counts.copy()
+
+conference_analysis = conference_analysis.merge(conference_tier_counts, on="SCHOOL CONFERENCE", how="left")
+
+conference_analysis = conference_analysis.merge(conference_tier_percentages, on="SCHOOL CONFERENCE", how="left")
+
+conference_analysis = conference_analysis.merge(conference_star_counts, on="SCHOOL CONFERENCE", how="left")
+
+conference_analysis = conference_analysis.merge(conference_star_percentages, on="SCHOOL CONFERENCE", how="left")
+
+conference_analysis = conference_analysis.merge(conference_hs_rank, on="SCHOOL CONFERENCE", how="left")
+
+conference_analysis = conference_analysis.merge(conference_height, on="SCHOOL CONFERENCE",how="left")
+
+conference_analysis = conference_analysis.merge(conference_weight,on="SCHOOL CONFERENCE",how="left")
+
+###################################################################
+                #Baseline High School Values & Stars#
+###################################################################
+
+elite_hs_baseline = tiers_baseline.loc["Elite HS", "% of Qbs"]
+
+good_hs_baseline = tiers_baseline.loc["Good HS", "% of Qbs"]
+
+average_hs_baseline = tiers_baseline.loc["Average HS", "% of Qbs"]
+
+below_avg_hs_baseline = tiers_baseline.loc["Below Average HS", "% of Qbs"]
+
+five_star_baseline = stars_baseline.loc[5, "% of Qbs"]
+
+four_star_baseline = stars_baseline.loc[4, "% of Qbs"]
+
+three_star_baseline = stars_baseline.loc[3, "% of Qbs"]
+
+two_star_baseline = stars_baseline.loc[2, "% of Qbs"]
+
+one_star_baseline = stars_baseline.loc[1, "% of Qbs"]
+
+unranked_baseline = stars_baseline.loc[0, "% of Qbs"]
+
+###################################################################
+                #School Baseline Comparisons#
+###################################################################
+
+school_analysis["ELITE HS VS BASELINE"] = (
+    school_analysis["ELITE HS %"] - elite_hs_baseline
+)
+
+school_analysis["GOOD HS VS BASELINE"] = (
+    school_analysis["GOOD HS %"] - good_hs_baseline
+)
+
+school_analysis["AVERAGE HS VS BASELINE"] = (
+    school_analysis["AVERAGE HS %"] - average_hs_baseline
+)
+
+school_analysis["BELOW AVG HS VS BASELINE"] = (
+    school_analysis["BELOW AVG HS %"] - below_avg_hs_baseline
+)
+
+school_analysis["5 STAR VS BASELINE"] = (
+    school_analysis["5 STAR %"] - five_star_baseline
+)
+
+school_analysis["4 STAR VS BASELINE"] = (
+    school_analysis["4 STAR %"] - four_star_baseline
+)
+
+school_analysis["3 STAR VS BASELINE"] = (
+    school_analysis["3 STAR %"] - three_star_baseline
+)
+
+school_analysis["2 STAR VS BASELINE"] = (
+    school_analysis["2 STAR %"] - two_star_baseline
+)
+
+school_analysis["1 STAR VS BASELINE"] = (
+    school_analysis["1 STAR %"] - one_star_baseline
+)
+
+school_analysis["UNRANKED VS BASELINE"] = (
+    school_analysis["UNRANKED %"] - unranked_baseline
+)
+
+###################################################################
+                #Baseline Conference Values & Stars#
+###################################################################
+
+conference_analysis["ELITE HS VS BASELINE"] = (
+    conference_analysis["ELITE HS %"] - elite_hs_baseline
+)
+
+conference_analysis["GOOD HS VS BASELINE"] = (
+    conference_analysis["GOOD HS %"] - good_hs_baseline
+)
+
+conference_analysis["AVERAGE HS VS BASELINE"] = (
+    conference_analysis["AVERAGE HS %"] - average_hs_baseline
+)
+
+conference_analysis["BELOW AVG HS VS BASELINE"] = (
+    conference_analysis["BELOW AVG HS %"] - below_avg_hs_baseline
+)
+
+conference_analysis["5 STAR VS BASELINE"] = (
+    conference_analysis["5 STAR %"] - five_star_baseline
+)
+
+conference_analysis["4 STAR VS BASELINE"] = (
+    conference_analysis["4 STAR %"] - four_star_baseline
+)
+
+conference_analysis["3 STAR VS BASELINE"] = (
+    conference_analysis["3 STAR %"] - three_star_baseline
+)
+
+conference_analysis["2 STAR VS BASELINE"] = (
+    conference_analysis["2 STAR %"] - two_star_baseline
+)
+
+conference_analysis["1 STAR VS BASELINE"] = (
+    conference_analysis["1 STAR %"] - one_star_baseline
+)
+
+conference_analysis["UNRANKED VS BASELINE"] = (
+    conference_analysis["UNRANKED %"] - unranked_baseline
+)
+
+###################################################################
+                    #Combined Star Groups#
+###################################################################
+
+school_analysis["4-5 STAR QBS"] = (
+    school_analysis["5 STAR QBS"]
+    + school_analysis["4 STAR QBS"]
+)
+
+school_analysis["4-5 STAR %"] = (
+    school_analysis["4-5 STAR QBS"]
+    / school_analysis["Total Qbs"]
+    * 100
+).round(1)
+
+school_analysis["3 STAR OR LOWER QBS"] = (
+    school_analysis["3 STAR QBS"]
+    + school_analysis["2 STAR QBS"]
+    + school_analysis["1 STAR QBS"]
+    + school_analysis["UNRANKED QBS"]
+)
+
+school_analysis["3 STAR OR LOWER %"] = (
+    school_analysis["3 STAR OR LOWER QBS"]
+    / school_analysis["Total Qbs"]
+    * 100
+).round(1)
+
+###################################################################
+                            #Export#
+###################################################################
+
+output_file = r"C:\Users\UxVeg\OneDrive\Documents\UCONN_QB_ANALYSIS.xlsx"
+
+with pd.ExcelWriter(output_file, engine="openpyxl") as writer:
+
+    tiers_baseline.to_excel(
+        writer,
+        sheet_name="Tier Baseline"
+    )
+
+    stars_baseline.to_excel(
+        writer,
+        sheet_name="Star Baseline"
+    )
+
+    school_analysis.to_excel(
+        writer,
+        sheet_name="School Analysis",
+        index=False
+    )
+
+    conference_analysis.to_excel(
+        writer,
+        sheet_name="Conference Analysis",
+        index=False
+    )
+
+print("\nAnalysis complete!")
+print("File saved to:")
+print(output_file)
