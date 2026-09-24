@@ -83,11 +83,33 @@ categorical_variables = [
     "RECRUIT STATUS"
 ]
 
+
 ###################################################################
                         #ANOVA Function#
 ###################################################################
 
 def anova_func(data, numerical_variable, categorical_variable):
+
+    test_data = data[
+        [numerical_variable, categorical_variable
+        ]
+    ].dropna().copy()
+
+    group_counts = (
+        test_data[categorical_variable]
+        .value_counts()
+    )
+
+    valid_groups = group_counts[
+        group_counts >= 2
+    ].index
+
+    test_data = test_data[
+        test_data[categorical_variable].isin(valid_groups)
+    ]
+
+    if test_data[categorical_variable].nunique() < 2:
+        return None
 
     formula = (
         f'Q("{numerical_variable}") '
@@ -96,12 +118,21 @@ def anova_func(data, numerical_variable, categorical_variable):
 
     model = ols(
         formula=formula,
-        data=data
+        data=test_data
     ).fit()
 
     anova_table = sm.stats.anova_lm(
         model,
         typ=2
+    )
+
+    total_sum_squares = (
+        anova_table["sum_sq"].sum()
+    )
+
+    anova_table["ETA SQUARED"] = (
+        anova_table["sum_sq"]
+        / total_sum_squares
     )
 
     return anova_table
@@ -149,35 +180,260 @@ for category in categorical_variables:
 
 anova_summary = []
 
+for test_name, result in anova_results.items():
+
+    numerical, category = test_name.split(" BY ",1)
+
+    f_statistic = result.iloc[0]["F"]
+    p_value = result.iloc[0]["PR(>F)"]
+    eta_squared = result.iloc[0]["ETA SQUARED"]
+
+    if p_value < 0.05:
+        significant = "YES"
+    else:
+        significant = "NO"
+
+    anova_summary.append(
+        {
+        "NUMERICAL VARIABLE": numerical,
+        "GROUP VARIABLE": category,
+        "F STATISTIC": f_statistic,
+        "P VALUE": p_value,
+        "SIGNIFICANT": significant,
+        "ETA SQUARED": eta_squared
+        }
+    )
+
+anova_summary = pd.DataFrame(anova_summary)
+
+anova_summary = anova_summary.sort_values("P VALUE", ascending=True)
+
+###################################################################
+                        #Group Statistics#
+###################################################################
+
+group_statistics = []
+
 for category in categorical_variables:
 
     for numerical in numerical_variables:
 
-        result = anova_func(
-            anova_data,
-            numerical,
-            category
+        test_data = anova_data[
+            [numerical, category]
+        ].dropna().copy()
+
+        group_stats = (
+            test_data.groupby(category)[numerical]
+            .agg(
+                [
+                    "count",
+                    "mean",
+                    "median",
+                    "std"
+                ]
+            )
+            .reset_index()
         )
 
-        f_statistic = result.iloc[0]["F"]
-        p_value = result.iloc[0]["PR(>F)"]
+        for _, row in group_stats.iterrows():
 
-        if p_value < 0.05:
-            significant = "YES"
-        else:
-            significant = "NO"
+            group_statistics.append(
+                {
+                    "NUMERICAL VARIABLE": numerical,
+                    "GROUP VARIABLE": category,
+                    "GROUP": row[category],
+                    "SAMPLE SIZE": row["count"],
+                    "MEAN": row["mean"],
+                    "MEDIAN": row["median"],
+                    "STANDARD DEVIATION": row["std"]
+                }
+            )
 
-        anova_summary.append(
-            {
-                "NUMERICAL VARIABLE": numerical,
-                "GROUP VARIABLE": category,
-                "F STATISTIC": f_statistic,
-                "P VALUE": p_value,
-                "SIGNIFICANT": significant
-            }
-        )
+group_statistics = pd.DataFrame(
+    group_statistics
+)
 
-anova_summary = pd.DataFrame(anova_summary)
+###################################################################
+                #Multivariable Rating Analysis#
+###################################################################
+
+rating_model_data = anova_data[
+    [
+        "247 RATINGS",
+        "INCHES",
+        "WEIGHT",
+        "HIGH SCHOOL RANK",
+        "HIGH SCHOOL TIER",
+        "CLASS"
+    ]
+].dropna().copy()
+
+rating_model = ols(
+    formula=(
+        'Q("247 RATINGS") ~ '
+        'Q("INCHES") + '
+        'Q("WEIGHT") + '
+        'Q("HIGH SCHOOL RANK") + '
+        'C(Q("HIGH SCHOOL TIER")) + '
+        'C(Q("CLASS"))'
+    ),
+    data=rating_model_data
+).fit()
+
+rating_anova = sm.stats.anova_lm(
+    rating_model,
+    typ=2
+)
+
+###################################################################
+                    #Partial Eta Squared#
+###################################################################
+
+residual_sum_squares = (
+    rating_anova.loc[
+        "Residual",
+        "sum_sq"
+    ]
+)
+
+rating_anova["PARTIAL ETA SQUARED"] = (
+    rating_anova["sum_sq"]
+    / (
+        rating_anova["sum_sq"]
+        + residual_sum_squares
+    )
+)
+
+rating_anova.loc[
+    "Residual",
+    "PARTIAL ETA SQUARED"
+] = None
+
+###################################################################
+                    #Clean ANOVA Output#
+###################################################################
+
+rating_anova = rating_anova.reset_index()
+
+rating_anova = rating_anova.rename(
+    columns={
+        "index": "VARIABLE",
+        "sum_sq": "SUM OF SQUARES",
+        "df": "DF",
+        "F": "F STATISTIC",
+        "PR(>F)": "P VALUE"
+    }
+)
+
+rating_anova["VARIABLE"] = rating_anova["VARIABLE"].replace(
+    {
+        'Q("INCHES")': "INCHES",
+        'Q("WEIGHT")': "WEIGHT",
+        'Q("HIGH SCHOOL RANK")': "HIGH SCHOOL RANK",
+        'C(Q("HIGH SCHOOL TIER"))': "HIGH SCHOOL TIER",
+        'C(Q("CLASS"))': "CLASS",
+        "Residual": "RESIDUAL"
+    }
+)
+
+###################################################################
+                    #Rating Model Summary#
+###################################################################
+
+rating_model_summary = pd.DataFrame(
+    {
+        "STATISTIC": [
+            "SAMPLE SIZE",
+            "R SQUARED",
+            "ADJUSTED R SQUARED"
+        ],
+
+        "VALUE": [
+            int(rating_model.nobs),
+            rating_model.rsquared,
+            rating_model.rsquared_adj
+        ]
+    }
+)
+
+###################################################################
+                #Compare Rating Models#
+###################################################################
+
+rating_models = {}
+
+###################################################################
+                    #Model 1 - Both#
+###################################################################
+
+model_1 = ols(
+    formula=(
+        'Q("247 RATINGS") ~ '
+        'Q("INCHES") + '
+        'Q("WEIGHT") + '
+        'Q("HIGH SCHOOL RANK") + '
+        'C(Q("HIGH SCHOOL TIER")) + '
+        'C(Q("CLASS"))'
+    ),
+    data=anova_data
+).fit()
+
+rating_models["Both HS Variables"] = model_1
+
+###################################################################
+                    #Model 2 - HS Rank#
+###################################################################
+
+model_2 = ols(
+    formula=(
+        'Q("247 RATINGS") ~ '
+        'Q("INCHES") + '
+        'Q("WEIGHT") + '
+        'Q("HIGH SCHOOL RANK") + '
+        'C(Q("CLASS"))'
+    ),
+    data=anova_data
+).fit()
+
+rating_models["HS Rank Only"] = model_2
+
+###################################################################
+                    #Model 3 - HS Tier#
+###################################################################
+
+model_3 = ols(
+    formula=(
+        'Q("247 RATINGS") ~ '
+        'Q("INCHES") + '
+        'Q("WEIGHT") + '
+        'C(Q("HIGH SCHOOL TIER")) + '
+        'C(Q("CLASS"))'
+    ),
+    data=anova_data
+).fit()
+
+rating_models["HS Tier Only"] = model_3
+
+###################################################################
+                    #Model Comparison#
+###################################################################
+
+model_comparison = []
+
+for model_name, model in rating_models.items():
+
+    model_comparison.append(
+        {
+            "MODEL": model_name,
+            "SAMPLE SIZE": int(model.nobs),
+            "R SQUARED": model.rsquared,
+            "ADJUSTED R SQUARED": model.rsquared_adj
+        }
+    )
+
+model_comparison = pd.DataFrame(
+    model_comparison
+)
 
 ###################################################################
                             #Export#
@@ -194,6 +450,30 @@ with pd.ExcelWriter(
         writer,
         sheet_name="ANOVA Summary",
         index=False)
+    
+    group_statistics.to_excel(
+        writer,
+        sheet_name="Group Statistics",
+        index=False
+    )
+    
+    rating_anova.to_excel(
+        writer,
+        sheet_name="Multivariable Rating",
+        index=False
+    )
+
+    rating_model_summary.to_excel(
+        writer,
+        sheet_name="Rating Model Summary",
+        index=False
+    )
+    
+    model_comparison.to_excel(
+        writer,
+        sheet_name="Rating Model Comparison",
+        index=False
+    )
 
     for test_name, result in anova_results.items():
         sheet_name = test_name[:31]
@@ -203,8 +483,3 @@ with pd.ExcelWriter(
 print("File saved to:")
 print(output_file)
         
-
-
-
-
-
